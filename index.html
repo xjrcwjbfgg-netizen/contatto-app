@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ConTatto — Parliamo di sesso</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', system-ui, sans-serif; background: #FEFCFA; min-height: 100vh; }
+  button { font-family: 'DM Sans', system-ui, sans-serif; cursor: pointer; }
+  textarea { font-family: 'DM Sans', system-ui, sans-serif; }
+  input { font-family: 'DM Sans', system-ui, sans-serif; }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes slideIn { from { opacity:0; transform:translateX(-10px); } to { opacity:1; transform:translateX(0); } }
+  .fade-up { animation: fadeUp 0.5s ease; }
+  .slide-in { animation: slideIn 0.35s ease; }
+  #app { min-height: 100vh; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ── Firebase config ─────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyB5WdABp6tv-_fVNVYUlhwsJgnWW41YxbM",
+  authDomain: "contatto-1a40d.firebaseapp.com",
+  databaseURL: "https://contatto-1a40d-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "contatto-1a40d",
+  storageBucket: "contatto-1a40d.firebasestorage.app",
+  messagingSenderId: "945781571409",
+  appId: "1:945781571409:web:cd206f49a015abf99d9d70",
+  measurementId: "G-8ECT29CGNT"
+};
+
+// ── Data ────────────────────────────────────────────────────
+const TEAL = "#2BA8A0";
+const PEACH = "#E8A882";
+const CORAL = "#C85A3A";
+const HOST_PW = "contatto";
+const VLABELS = ["Per niente", "Poco", "Così così", "Molto", "Moltissimo"];
+const VCOLS = ["#93c5fd", "#6ee7b7", "#fcd34d", "#fb923c", "#f87171"];
+
+const SECTIONS = [
+  { id:"corpo", theme:"CORPO", color:"#2BA8A0",
+    intro:"Il corpo è il primo luogo in cui abitiamo. Eppure spesso è anche il primo posto da cui fuggiamo, o che impariamo a vergognare prima ancora di capire perché. Siamo cresciutə in culture che ci hanno insegnato a giudicarlo, confrontarlo, nasconderlo o esibirlo secondo regole che non abbiamo scelto. In questo spazio vogliamo fermarci un momento su di esso — non per analizzarlo, ma per ascoltarlo.",
+    questions:[
+      { id:"c1", text:"Quanto ti senti a tuo agio nel tuo corpo durante l'intimità?", vote:true },
+      { id:"c2", text:"C'è qualcosa del tuo corpo che hai imparato ad accettare solo con il tempo?", vote:false }
+    ]},
+  { id:"desiderio", theme:"DESIDERIO", color:"#D4725A",
+    intro:"Il desiderio è una delle forze più vive che abbiamo. Eppure spesso lo teniamo a bada, lo filtriamo, lo traduciamo in qualcosa di più accettabile prima di mostrarlo. Perché desiderare — davvero, senza chiedere permesso — può fare paura. Qui non ci sono desideri giusti o sbagliati. Solo la possibilità di riconoscersi.",
+    questions:[
+      { id:"d1", text:"Quanto ti senti liberə di chiedere quello che vuoi davvero, in una relazione intima?", vote:true },
+      { id:"d2", text:"C'è un desiderio che hai sempre fatto fatica ad ammettere, anche solo a te stessə?", vote:false }
+    ]},
+  { id:"vergogna", theme:"VERGOGNA & STIGMA", color:"#9B7EAA",
+    intro:"La vergogna non nasce dentro di noi — viene messa lì. Da uno sguardo, una battuta, un silenzio al momento sbagliato. Si attacca al corpo, alle scelte, all'identità, e spesso lavora in silenzio per anni. Parlarne non la cancella subito, ma comincia a toglierle potere. Questo è uno spazio per farlo, senza giudizio.",
+    questions:[
+      { id:"v1", text:"Quanto la vergogna ha condizionato le tue scelte sessuali o affettive?", vote:true },
+      { id:"v2", text:"C'è qualcosa che hai vissuto in silenzio perché pensavi non fosse 'normale'?", vote:false }
+    ]},
+  { id:"educazione", theme:"EDUCAZIONE & LINGUAGGIO", color:"#5B9E8A",
+    intro:"Le parole che usiamo per parlare di sesso, corpo e desiderio non sono neutre. Alcune aprono, altre chiudono. Alcune liberano, altre escludono. L'educazione che abbiamo ricevuto — o che non abbiamo ricevuto — ha plasmato il modo in cui ci viviamo. Vale la pena guardarla, riconoscerla, e forse iniziare a scegliere parole diverse.",
+    questions:[
+      { id:"e1", text:"Chi ti ha parlato di sesso per la prima volta — e cosa ti ha lasciato?", vote:false },
+      { id:"e2", text:"C'è una parola legata al sesso o al corpo che ancora oggi ti mette a disagio?", vote:false }
+    ]},
+  { id:"relazioni", theme:"RELAZIONI & CONSENSO", color:"#C87850",
+    intro:"Le relazioni sono il luogo dove tutto diventa concreto — il desiderio, la paura, il bisogno di essere vistə. Il consenso non è solo una parola che si dice una volta: è un modo di stare con l'altrə, di ascoltare, di rispettare anche quando è scomodo. Parlarne significa anche capire quanto spesso non lo abbiamo imparato davvero.",
+    questions:[
+      { id:"r1", text:"Quanto è facile per te dire no — senza sentirti in colpa?", vote:true },
+      { id:"r2", text:"Hai mai fatto qualcosa per compiacere l'altrə, tradendo quello che sentivi?", vote:true }
+    ]},
+  { id:"identita", theme:"IDENTITÀ & LIBERTÀ", color:"#5B8FB8",
+    intro:"Chi siamo — nel desiderio, nel genere, nel modo in cui viviamo il corpo e le relazioni — non è sempre qualcosa che si trova subito, né qualcosa che si trova una volta sola. Per molte persone, abitare la propria identità ha significato lottare, nascondersi, o reinventarsi. Questa sezione è uno spazio per riconoscere quella complessità, senza doverla semplificare.",
+    questions:[
+      { id:"i1", text:"C'è una parte di te — nel desiderio, nell'identità, nel corpo — che hai nascosto per paura del giudizio?", vote:false },
+      { id:"i2", text:"Se potessi cambiare una cosa nel modo in cui la società parla di sesso, quale sarebbe?", vote:false }
+    ]}
+];
+
+const PAGES = [];
+SECTIONS.forEach(s => {
+  PAGES.push({ type:"intro", pageId:`${s.id}_i`, sectionId:s.id, theme:s.theme, color:s.color, intro:s.intro });
+  s.questions.forEach((q,i) => PAGES.push({ type:"question", pageId:q.id, sectionId:s.id, theme:s.theme, color:s.color, qNum:i+1, text:q.text, vote:q.vote }));
+});
+
+// ── State ────────────────────────────────────────────────────
+let mode = "welcome"; // welcome | participant | hostauth | host
+let pageIdx = 0;
+let allData = {};
+let myVote = null;
+let myText = "";
+let myDone = new Set();
+let logoTaps = 0;
+let pw = "";
+let pwErr = false;
+let db = null;
+let animKey = 0;
+
+// ── Firebase init ────────────────────────────────────────────
+function initFirebase() {
+  try {
+    const fbApp = initializeApp(firebaseConfig);
+    db = getDatabase(fbApp);
+    // Listen for pageIdx changes
+    onValue(ref(db, "session/pageIdx"), snap => {
+      const val = snap.val();
+      if (val !== null && val !== pageIdx) { pageIdx = val; render(); }
+    });
+    // Listen for responses
+    onValue(ref(db, "session/data"), snap => {
+      const val = snap.val();
+      if (val !== null) { allData = val; render(); }
+    });
+  } catch(e) {
+    console.warn("Firebase not configured yet:", e.message);
+  }
+}
+
+async function pushPageIdx(idx) {
+  if (!db) return;
+  try { await set(ref(db, "session/pageIdx"), idx); } catch(e) {}
+}
+async function pushData(d) {
+  if (!db) return;
+  try { await set(ref(db, "session/data"), d); } catch(e) {}
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function logo(large) {
+  const sz = large ? 48 : 22;
+  const szSub = large ? 20 : 11;
+  return `<span style="display:inline-flex;align-items:baseline;gap:${large?8:4}px;">
+    <span style="font-family:'DM Serif Display',Georgia,serif;font-style:italic;font-size:${sz}px;color:${TEAL};font-weight:400;text-shadow:0 2px 18px ${TEAL}55;">Con</span><span style="font-family:'DM Serif Display',Georgia,serif;font-style:italic;font-size:${sz}px;color:${PEACH};font-weight:400;text-shadow:0 2px 18px ${PEACH}66;">tatto</span><span style="font-family:'DM Sans',system-ui,sans-serif;font-size:${szSub}px;font-weight:800;letter-spacing:1px;color:${TEAL};text-shadow:0 1px 6px ${TEAL}33;">GRUPPO</span><span style="font-family:'DM Sans',system-ui,sans-serif;font-size:${szSub}px;font-weight:800;color:${PEACH};text-shadow:0 1px 6px ${PEACH}44;">+</span>
+  </span>`;
+}
+
+function page() { return PAGES[pageIdx]; }
+function pageData() { return allData[page().pageId] || []; }
+function votes() { return pageData().map(r=>r.vote).filter(Boolean); }
+function texts() { return pageData().map(r=>r.text).filter(Boolean); }
+function vc() { return [1,2,3,4,5].map(v => votes().filter(x=>x===v).length); }
+function maxV() { return Math.max(...vc(), 1); }
+function sectionNum() { return SECTIONS.findIndex(s=>s.id===page().sectionId)+1; }
+
+// ── Render ───────────────────────────────────────────────────
+function render() {
+  const app = document.getElementById("app");
+  if (mode === "welcome") app.innerHTML = renderWelcome();
+  else if (mode === "participant") app.innerHTML = renderParticipant();
+  else if (mode === "hostauth") app.innerHTML = renderHostAuth();
+  else if (mode === "host") app.innerHTML = renderHost();
+  attachEvents();
+}
+
+function renderWelcome() {
+  return `
+  <div style="min-height:100vh;background:#FEFCFA;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 28px;position:relative;overflow:hidden;">
+    <div style="position:absolute;top:-120px;right:-100px;width:400px;height:400px;border-radius:50%;background:${TEAL}0d;pointer-events:none;"></div>
+    <div style="position:absolute;bottom:-100px;left:-80px;width:300px;height:300px;border-radius:50%;background:${PEACH}18;pointer-events:none;"></div>
+    <div style="max-width:480px;width:100%;text-align:center;position:relative;">
+      <div style="display:flex;justify-content:center;margin-bottom:28px;cursor:pointer;" id="logo-tap">
+        <img src="https://raw.githubusercontent.com/xjrcwjbfgg-netizen/contatto-app/main/logo.png" alt="ConTatto" style="max-width:220px;width:100%;" onerror="this.style.display='none';document.getElementById('logo-fallback').style.display='flex';" />
+        <span id="logo-fallback" style="display:none;font-family:'DM Serif Display',Georgia,serif;font-style:italic;font-size:48px;"><span style="color:${TEAL};">Con</span><span style="color:${PEACH};">tatto</span></span>
+      </div>
+      <h1 style="font-family:'DM Serif Display',Georgia,serif;font-size:48px;font-weight:400;color:#111;line-height:1.05;margin:0 0 8px;font-style:italic;text-shadow:0 2px 24px rgba(0,0,0,0.10);">Parliamo</h1>
+      <h1 style="font-family:'DM Serif Display',Georgia,serif;font-size:48px;font-weight:400;color:${TEAL};line-height:1.05;margin:0 0 36px;text-shadow:0 2px 24px ${TEAL}44;">di sesso.</h1>
+      <div style="background:white;border-radius:20px;padding:24px 28px;margin-bottom:32px;text-align:left;box-shadow:0 2px 20px rgba(0,0,0,0.06);border:1px solid #f0ebe4;">
+        <p style="color:#444;font-size:15px;line-height:1.8;margin:0 0 16px;"><strong style="color:${TEAL};font-size:17px;letter-spacing:1px;font-weight:800;">CONTATTO GRUPPO+</strong> e uno spazio di incontro, ascolto e confronto dedicato a persone che vivono con HIV, persone sierocoinvolte, alleatae e a chiunque desideri informarsi e partecipare in modo rispettoso e consapevole.</p>
+        <p style="color:#444;font-size:15px;line-height:1.8;margin:0 0 16px;">Il gruppo affronta temi molteplici e intersezionali legati a HIV, stigma, salute sessuale, benessere emotivo, relazioni, linguaggio, identita e comunita - creando uno spazio umano, non giudicante e partecipativo.</p>
+        <div style="border-top:1px solid #f0ebe4;padding-top:16px;margin-top:4px;">
+          <p style="color:#999;font-size:13px;line-height:1.7;margin:0;">Questo spazio digitale viene utilizzato durante le serate di ConTatto per attivazioni, domande, sondaggi e momenti interattivi. Non richiede registrazione, non raccoglie dati personali ed e completamente anonimo.</p>
+        </div>
+      </div>
+      <button id="btn-start" style="display:block;width:100%;background:${CORAL};color:white;border:none;border-radius:18px;padding:20px 32px;font-size:18px;font-weight:700;margin-bottom:14px;text-shadow:0 1px 4px rgba(0,0,0,0.18);box-shadow:0 4px 20px ${CORAL}44;">Partecipa alla serata</button>
+      <p style="margin-top:24px;color:#ccc;font-size:13px;">Mercoledi 13 maggio - Gaycenter - ore 20:00</p>
+    </div>
+  </div>`;
+}
+
+function renderHostAuth() {
+  return `
+  <div style="min-height:100vh;background:#FEFCFA;display:flex;align-items:center;justify-content:center;padding:32px;">
+    <div style="max-width:360px;width:100%;text-align:center;">
+      <div style="display:flex;justify-content:center;margin-bottom:32px;">${logo(false)}</div>
+      <div style="color:${TEAL};font-size:12px;letter-spacing:5px;font-weight:800;margin-bottom:28px;">ACCESSO HOST</div>
+      <input id="pw-input" type="password" placeholder="Codice accesso" value="${pw}"
+        style="width:100%;padding:16px 20px;border-radius:14px;font-size:17px;outline:none;margin-bottom:10px;border:2px solid ${pwErr?CORAL:'#e8ddd4'};background:white;color:#333;" />
+      ${pwErr ? `<p style="color:${CORAL};font-size:14px;margin:0 0 12px;font-weight:600;">Codice non corretto</p>` : ''}
+      <button id="btn-login" style="width:100%;background:${TEAL};color:white;border:none;border-radius:14px;padding:18px;font-size:16px;font-weight:700;margin-bottom:14px;box-shadow:0 4px 16px ${TEAL}44;">Entra</button>
+      <button id="btn-back" style="background:none;border:none;color:#bbb;font-size:14px;">Indietro</button>
+    </div>
+  </div>`;
+}
+
+function renderParticipant() {
+  const pg = page();
+  const isIntro = pg.type === "intro";
+  const answered = myDone.has(pg.pageId);
+  let content = "";
+
+  if (isIntro) {
+    content = `
+      <div class="fade-up">
+        <div style="width:48px;height:5px;background:${pg.color};border-radius:4px;margin-bottom:26px;box-shadow:0 2px 10px ${pg.color}55;"></div>
+        <h2 style="font-family:'DM Serif Display',Georgia,serif;font-size:36px;font-weight:400;color:#111;line-height:1.2;margin:0 0 24px;font-style:italic;text-shadow:0 2px 16px rgba(0,0,0,0.10);">${pg.theme}</h2>
+        <p style="color:#555;font-size:17px;line-height:1.85;margin:0 0 32px;">${pg.intro}</p>
+        <div style="background:${pg.color}10;border:1.5px solid ${pg.color}28;border-radius:16px;padding:16px 20px;">
+          <p style="color:${pg.color};font-size:15px;font-weight:600;margin:0;">La prima domanda sta per arrivare — rimani qui.</p>
+        </div>
+      </div>`;
+  } else if (answered) {
+    content = `
+      <div class="fade-up" style="text-align:center;padding-top:24px;">
+        <div style="background:${pg.color}10;border:1.5px solid ${pg.color}22;border-radius:20px;padding:40px 28px;">
+          <p style="color:${pg.color};font-weight:800;font-size:22px;margin:0 0 10px;text-shadow:0 2px 12px ${pg.color}44;">Risposta inviata!</p>
+          <p style="color:#999;font-size:16px;margin:0;line-height:1.7;">Aspetta la prossima domanda dall'host.</p>
+        </div>
+      </div>`;
+  } else {
+    const voteHtml = pg.vote ? `
+      <div style="margin-bottom:30px;">
+        <p style="color:#aaa;font-size:11px;letter-spacing:3px;font-weight:700;margin-bottom:16px;">IL TUO VOTO</p>
+        <div style="display:flex;gap:8px;">
+          ${VLABELS.map((label,i) => `
+            <button data-vote="${i+1}" style="flex:1;padding:14px 3px 10px;border-radius:14px;border:${myVote===i+1?`3px solid ${VCOLS[i]}`:'2px solid #e8ddd4'};background:${myVote===i+1?VCOLS[i]:'white'};color:${myVote===i+1?'white':'#aaa'};font-weight:800;font-size:20px;display:flex;flex-direction:column;align-items:center;gap:5px;transition:all 0.15s;box-shadow:${myVote===i+1?`0 4px 14px ${VCOLS[i]}66`:'none'};">
+              ${i+1}<span style="font-size:8px;font-weight:700;text-align:center;line-height:1.3;">${label}</span>
+            </button>`).join('')}
+        </div>
+      </div>` : '';
+
+    const canSubmit = pg.vote ? (myVote || myText.trim()) : myText.trim();
+    content = `
+      <div class="fade-up">
+        <div style="display:inline-block;background:${pg.color}14;color:${pg.color};border-radius:8px;padding:5px 14px;font-size:11px;font-weight:800;letter-spacing:3px;margin-bottom:18px;">DOMANDA ${pg.qNum}</div>
+        <h2 style="font-family:'DM Serif Display',Georgia,serif;font-size:26px;font-weight:400;color:#111;line-height:1.5;margin:0 0 34px;text-shadow:0 2px 12px rgba(0,0,0,0.08);">${pg.text}</h2>
+        ${voteHtml}
+        <div style="margin-bottom:30px;">
+          <p style="color:#aaa;font-size:11px;letter-spacing:3px;font-weight:700;margin-bottom:16px;">${pg.vote?'AGGIUNGI QUALCOSA (opzionale)':'LA TUA RISPOSTA'}</p>
+          <textarea id="my-text" rows="4" placeholder="Scrivi qui, in modo anonimo..."
+            style="width:100%;border-radius:14px;border:2px solid #e8ddd4;padding:16px 18px;font-size:16px;resize:none;outline:none;background:white;line-height:1.65;color:#333;">${myText}</textarea>
+        </div>
+        <button id="btn-submit" style="width:100%;background:${canSubmit?pg.color:'#e8ddd4'};color:${canSubmit?'white':'#ccc'};border:none;border-radius:16px;padding:19px;font-size:17px;font-weight:700;transition:all 0.2s;box-shadow:${canSubmit?`0 4px 18px ${pg.color}44`:'none'};">
+          Invia in modo anonimo &gt;&gt;&gt;
+        </button>
+        <p style="text-align:center;color:#ccc;font-size:13px;margin-top:16px;line-height:1.7;">Le tue risposte sono completamente anonime.<br>Non vengono raccolti dati personali.</p>
+      </div>`;
+  }
+
+  return `
+  <div style="min-height:100vh;background:#FEFCFA;max-width:500px;margin:0 auto;">
+    <div style="height:5px;background:${pg.color};width:100%;box-shadow:0 2px 12px ${pg.color}55;"></div>
+    <div style="padding:26px 24px 48px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:32px;">
+        ${logo(false)}
+        <div style="display:flex;gap:8px;">
+          <span style="background:${pg.color}18;color:${pg.color};border-radius:20px;padding:5px 14px;font-size:11px;font-weight:800;letter-spacing:2px;">${pg.theme}</span>
+          <span style="background:#f0ebe4;color:#bbb;border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;">${sectionNum()}/6</span>
+        </div>
+      </div>
+      ${content}
+    </div>
+  </div>`;
+}
+
+function renderHost() {
+  const pg = page();
+  const v = vc();
+  const mv = maxV();
+  const t = texts();
+  const vo = votes();
+
+  const votesBars = pg.type==="question" && pg.vote ? `
+    <div style="background:#141414;border-radius:16px;padding:14px 20px;flex-shrink:0;">
+      <div style="font-size:10px;letter-spacing:3px;color:#555;margin-bottom:12px;font-weight:700;">VOTI (${vo.length})</div>
+      ${VLABELS.map((label,i) => `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+          <span style="width:68px;font-size:11px;color:#666;text-align:right;">${label}</span>
+          <div style="flex:1;background:#1e1e1e;border-radius:8px;height:28px;overflow:hidden;">
+            <div style="width:${(v[i]/mv)*100}%;background:${VCOLS[i]};height:100%;border-radius:8px;display:flex;align-items:center;padding-left:${v[i]>0?10:0}px;min-width:${v[i]>0?30:0}px;transition:width 0.6s;">
+              ${v[i]>0?`<span style="font-size:13px;font-weight:800;">${v[i]}</span>`:''}
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>` : '';
+
+  const responsesHtml = t.length > 0 ? `
+    <div style="background:#141414;border-radius:16px;padding:14px 20px;flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <div style="font-size:10px;letter-spacing:3px;color:#555;margin-bottom:12px;font-weight:700;">RISPOSTE LIBERE (${t.length})</div>
+      <div style="overflow-y:auto;display:flex;flex-direction:column;gap:8px;flex:1;">
+        ${t.map(txt=>`<div style="background:#1c1c1c;border-radius:10px;padding:10px 14px;font-size:14px;line-height:1.65;border-left:3px solid ${pg.color};color:#ddd;">${txt}</div>`).join('')}
+      </div>
+    </div>` : `<div style="background:#141414;border-radius:16px;flex:1;display:flex;align-items:center;justify-content:center;">
+      <p style="color:#2a2a2a;font-size:15px;margin:0;">${pg.type==="intro"?`I partecipanti stanno leggendo <strong style="color:${pg.color};">${pg.theme}</strong>`:'In attesa di risposte...'}</p>
+    </div>`;
+
+  const scaletta = SECTIONS.map(s => {
+    const sPages = PAGES.filter(p=>p.sectionId===s.id);
+    const isCurrent = pg.sectionId===s.id;
+    return `
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;padding-left:2px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:${isCurrent?s.color:'#252525'};box-shadow:${isCurrent?`0 0 8px ${s.color}88`:'none'};"></div>
+          <span style="font-size:10px;letter-spacing:2px;color:${isCurrent?s.color:'#2a2a2a'};font-weight:700;">${s.theme}</span>
+        </div>
+        ${sPages.map(sp => {
+          const isCurPage = PAGES[pageIdx].pageId===sp.pageId;
+          const hasData = sp.type==="question" && allData[sp.pageId]?.length>0;
+          return `<button data-goto="${PAGES.indexOf(sp)}" style="width:100%;background:${isCurPage?s.color:'transparent'};border:none;border-radius:8px;padding:8px 10px;text-align:left;margin-bottom:2px;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:10px;color:${isCurPage?'rgba(255,255,255,0.75)':'#2e2e2e'};font-weight:700;min-width:30px;">${sp.type==="intro"?"INTRO":`D${sp.qNum}`}</span>
+            <span style="font-size:11px;color:${isCurPage?'white':'#484848'};line-height:1.3;flex:1;">${sp.type==="intro"?"Introduzione":sp.text.substring(0,36)+"…"}</span>
+            ${hasData?`<span style="background:${CORAL};color:white;border-radius:6px;padding:2px 6px;font-size:9px;font-weight:800;">${allData[sp.pageId].length}</span>`:''}
+          </button>`;}).join('')}
+      </div>`;}).join('');
+
+  const qrUrl = window.location.href.split('?')[0];
+
+  return `
+  <div style="min-height:100vh;background:#0a0a0a;color:white;padding:14px 16px 16px;font-family:'DM Sans',system-ui,sans-serif;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      ${logo(false)}
+      <div style="display:flex;gap:6px;">
+        <span style="background:${pg.color};border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;">${pg.theme}</span>
+        <span style="background:#1e1e1e;border-radius:20px;padding:5px 14px;font-size:12px;color:#555;">${pageIdx+1} / ${PAGES.length}</span>
+        ${pg.type==="question"?`<span style="background:${CORAL};border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;">${pageData().length} risp.</span>`:''}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 290px;gap:12px;height:calc(100vh - 62px);">
+      <div style="display:flex;flex-direction:column;gap:11px;overflow:hidden;">
+        <div class="slide-in" style="background:${pg.color};border-radius:20px;padding:24px 28px;flex-shrink:0;box-shadow:0 6px 30px ${pg.color}44;">
+          ${pg.type==="intro"?`
+            <div style="font-size:10px;letter-spacing:4px;opacity:0.7;margin-bottom:10px;font-weight:800;">INTRODUZIONE · SEZIONE ${sectionNum()} DI 6</div>
+            <h2 style="font-family:'DM Serif Display',Georgia,serif;font-size:26px;font-weight:400;line-height:1.25;margin:0 0 16px;font-style:italic;">${pg.theme}</h2>
+            <p style="font-size:14px;line-height:1.7;margin:0;opacity:0.92;">${pg.intro}</p>
+          `:`
+            <div style="font-size:10px;letter-spacing:4px;opacity:0.7;margin-bottom:10px;font-weight:800;">${pg.theme} · DOMANDA ${pg.qNum}</div>
+            <h2 style="font-family:'DM Serif Display',Georgia,serif;font-size:28px;font-weight:400;line-height:1.3;margin:0;">${pg.text}</h2>
+          `}
+        </div>
+        ${votesBars}
+        ${responsesHtml}
+        <div style="display:flex;gap:10px;flex-shrink:0;">
+          <button id="btn-prev" style="flex:1;background:#161616;color:${pageIdx===0?'#2a2a2a':'white'};border:1px solid #222;border-radius:12px;padding:14px;font-size:14px;font-weight:600;">Indietro</button>
+          ${pg.type==="question"?`<button id="btn-reset" style="background:transparent;color:${CORAL};border:1px solid ${CORAL}35;border-radius:12px;padding:14px 16px;font-size:12px;font-weight:600;">Azzera</button>`:''}
+          <button id="btn-next" style="flex:1;background:${pageIdx<PAGES.length-1?pg.color:'#161616'};color:${pageIdx<PAGES.length-1?'white':'#2a2a2a'};border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:700;box-shadow:${pageIdx<PAGES.length-1?`0 4px 16px ${pg.color}44`:'none'};">Avanti</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:11px;">
+        <div style="background:#FEFCFA;border-radius:18px;padding:18px;flex-shrink:0;text-align:center;">
+          <div style="font-size:10px;letter-spacing:3px;color:${TEAL};font-weight:800;margin-bottom:14px;">QR PARTECIPANTI</div>
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(qrUrl)}&bgcolor=FEFCFA&color=1A7070&margin=8" style="width:170px;height:170px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.10);" />
+          <p style="color:#aaa;font-size:11px;margin:8px 0 0;">Scansiona per partecipare</p>
+        </div>
+        <div style="background:#141414;border-radius:18px;padding:12px;flex:1;overflow:auto;">
+          <div style="font-size:10px;letter-spacing:3px;color:#333;margin-bottom:12px;font-weight:700;">SCALETTA</div>
+          ${scaletta}
+        </div>
+        <div style="background:#141414;border-radius:12px;padding:9px 14px;text-align:center;flex-shrink:0;">
+          <p style="color:#252525;font-size:11px;margin:0;">frecce ← → per navigare</p>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Events ───────────────────────────────────────────────────
+function attachEvents() {
+  const $ = id => document.getElementById(id);
+
+  if (mode === "welcome") {
+    $("btn-start")?.addEventListener("click", () => { mode="participant"; render(); });
+    $("logo-tap")?.addEventListener("click", () => {
+      logoTaps++;
+      if (logoTaps >= 5) { logoTaps=0; mode="hostauth"; render(); }
+    });
+  }
+
+  if (mode === "hostauth") {
+    const input = $("pw-input");
+    input?.addEventListener("input", e => { pw=e.target.value; pwErr=false; });
+    input?.addEventListener("keydown", e => { if(e.key==="Enter") tryLogin(); });
+    $("btn-login")?.addEventListener("click", tryLogin);
+    $("btn-back")?.addEventListener("click", () => { mode="welcome"; render(); });
+  }
+
+  if (mode === "participant") {
+    document.querySelectorAll("[data-vote]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        myVote = parseInt(btn.dataset.vote);
+        render();
+      });
+    });
+    const ta = $("my-text");
+    ta?.addEventListener("input", e => { myText=e.target.value; });
+    $("btn-submit")?.addEventListener("click", async () => {
+      const pg = page();
+      if (pg.vote && !myVote && !myText.trim()) return;
+      if (!pg.vote && !myText.trim()) return;
+      const r = {}; if (myVote) r.vote=myVote; if (myText.trim()) r.text=myText.trim();
+      const upd = { ...allData, [pg.pageId]: [...(allData[pg.pageId]||[]), r] };
+      allData = upd;
+      await pushData(upd);
+      myDone.add(pg.pageId);
+      myVote=null; myText=""; render();
+    });
+  }
+
+  if (mode === "host") {
+    $("btn-prev")?.addEventListener("click", () => goTo(pageIdx-1));
+    $("btn-next")?.addEventListener("click", () => goTo(pageIdx+1));
+    $("btn-reset")?.addEventListener("click", async () => {
+      const upd = {...allData}; delete upd[page().pageId];
+      allData=upd; await pushData(upd); render();
+    });
+    document.querySelectorAll("[data-goto]").forEach(btn => {
+      btn.addEventListener("click", () => goTo(parseInt(btn.dataset.goto)));
+    });
+    // keyboard navigation
+    document.onkeydown = e => {
+      if (e.key==="ArrowRight"||e.key==="ArrowDown") goTo(pageIdx+1);
+      if (e.key==="ArrowLeft"||e.key==="ArrowUp") goTo(pageIdx-1);
+    };
+  } else {
+    document.onkeydown = null;
+  }
+}
+
+async function goTo(idx) {
+  const n = Math.max(0, Math.min(PAGES.length-1, idx));
+  if (n===pageIdx) return;
+  pageIdx=n; animKey++;
+  await pushPageIdx(n);
+  render();
+}
+
+function tryLogin() {
+  if (pw === HOST_PW) { mode="host"; pwErr=false; render(); }
+  else { pwErr=true; render(); }
+}
+
+// ── Boot ─────────────────────────────────────────────────────
+initFirebase();
+render();
+</script>
+</body>
+</html>
